@@ -33,11 +33,13 @@ except ImportError:
 # Environment Configuration
 PORT = int(os.environ.get("PORT", 8080))
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "studio2026")
-TIDB_HOST = os.environ.get("TIDB_HOST")
+TIDB_HOST = os.environ.get("TIDB_HOST") or "gateway01.ap-southeast-1.prod.aws.tidbcloud.com"
 TIDB_PORT = int(os.environ.get("TIDB_PORT", 4000))
-TIDB_USER = os.environ.get("TIDB_USER")
-TIDB_PASSWORD = os.environ.get("TIDB_PASSWORD")
-TIDB_DATABASE = os.environ.get("TIDB_DATABASE", "test")
+TIDB_USER = os.environ.get("TIDB_USER") or "43eghUc9ZhsAxAo.root"
+TIDB_PASSWORD = os.environ.get("TIDB_PASSWORD") or "brY7OoRIozdKsK2j"
+TIDB_DATABASE = os.environ.get("TIDB_DATABASE") or "test"
+if TIDB_DATABASE == "sys":
+    TIDB_DATABASE = "test"
 
 # Default Initial Seed Data
 DEFAULT_DATA = {
