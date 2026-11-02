@@ -2,6 +2,7 @@ services:
   - type: web
     name: interactive-portfolio-cms
     env: python
+    region: singapore
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn server:app
@@ -9,14 +10,12 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.3
       - key: ADMIN_PASSWORD
-        generateValue: true
+        value: studio2026
       - key: TIDB_HOST
-        sync: false
+        value: gateway01.ap-southeast-1.prod.aws.tidbcloud.com
       - key: TIDB_PORT
         value: "4000"
       - key: TIDB_USER
-        sync: false
-      - key: TIDB_PASSWORD
-        sync: false
+        value: 43eghUc9ZhsAxAo.root
       - key: TIDB_DATABASE
-        value: "test"
+        value: sys
