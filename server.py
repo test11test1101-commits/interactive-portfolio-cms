@@ -327,9 +327,18 @@ def load_portfolio_data():
 
 def save_portfolio_data(data):
     try:
+        current, _ = load_portfolio_data()
+        if isinstance(current, dict) and isinstance(data, dict):
+            merged = {**current, **data}
+            if "brand" in current and "brand" in data and isinstance(data["brand"], dict):
+                merged["brand"] = {**current["brand"], **data["brand"]}
+            if "rail" in current and "rail" in data and isinstance(data["rail"], dict):
+                merged["rail"] = {**current["rail"], **data["rail"]}
+        else:
+            merged = data
         conn, engine = get_db_connection()
         cursor = conn.cursor()
-        payload_str = json.dumps(data)
+        payload_str = json.dumps(merged)
         if engine == "tidb":
             cursor.execute(
                 "UPDATE portfolio_store SET payload = %s WHERE id = 'main'",
