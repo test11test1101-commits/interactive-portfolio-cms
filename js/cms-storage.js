@@ -172,6 +172,49 @@ class CMSStorage {
     }
   }
 
+  getUploadEndpoint() {
+    const api = this.getApiEndpoint();
+    return api.replace(/\/api\/portfolio$/, "/api/upload-video");
+  }
+
+  async uploadVideo(file) {
+    if (!file) return { success: false, message: "No file selected" };
+    const pwd = this.getAdminPassword() || DEFAULT_ADMIN_KEY;
+    const endpoint = this.getUploadEndpoint();
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${pwd}`,
+          "X-Admin-Password": pwd,
+          "X-Filename": encodeURIComponent(file.name),
+          "Content-Type": file.type || "application/octet-stream"
+        },
+        body: file
+      });
+
+      if (res.status === 401) {
+        return {
+          success: false,
+          reason: "unauthorized",
+          message: "Authentication failed: Invalid Admin Key."
+        };
+      }
+
+      if (res.ok) {
+        const json = await res.json();
+        return { success: true, url: json.url };
+      }
+
+      const errText = await res.text();
+      return { success: false, message: `Upload failed (${res.status}): ${errText}` };
+    } catch (err) {
+      console.error("[CMS] Video upload error:", err);
+      return { success: false, message: `Upload failed: ${err.message}` };
+    }
+  }
+
   getData() {
     return this.data;
   }

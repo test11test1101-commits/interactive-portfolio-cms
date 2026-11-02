@@ -127,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="admin-card-preview">
           <img src="${p.image}" alt="${p.title}" />
           <div class="admin-card-tag">${p.badge || p.year}</div>
+          ${p.video ? `<div class="admin-card-tag" style="top: auto; bottom: 0.5rem; background: rgba(0, 229, 255, 0.2); border-color: rgba(0, 229, 255, 0.4); color: #00E5FF;">🎬 Video</div>` : ''}
         </div>
         <div class="admin-card-content">
           <div>
@@ -226,6 +227,49 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById(`formMetricVal${i+1}`).value = m.value || "";
     }
 
+    // Video Edit fields initialization
+    const formProjectVideo = document.getElementById("formProjectVideo");
+    const videoUploadFunctionContainer = document.getElementById("videoUploadFunctionContainer");
+    const btnToggleVideoUpload = document.getElementById("btnToggleVideoUpload");
+    const projectVideoFileInput = document.getElementById("projectVideoFileInput");
+    const videoUploadStatus = document.getElementById("videoUploadStatus");
+    const btnClearVideo = document.getElementById("btnClearVideo");
+    const videoPreviewWrapper = document.getElementById("videoPreviewWrapper");
+    const formProjectVideoPreview = document.getElementById("formProjectVideoPreview");
+
+    const existingVideo = project && project.video ? project.video.trim() : "";
+    if (formProjectVideo) formProjectVideo.value = existingVideo;
+    if (projectVideoFileInput) projectVideoFileInput.value = "";
+
+    if (existingVideo) {
+      if (videoUploadFunctionContainer) videoUploadFunctionContainer.style.display = "block";
+      if (btnToggleVideoUpload) btnToggleVideoUpload.textContent = "✕ Close Video Section";
+      if (videoUploadStatus) {
+        videoUploadStatus.textContent = "Attached: " + existingVideo.split("/").pop();
+        videoUploadStatus.style.color = "var(--admin-accent)";
+      }
+      if (btnClearVideo) btnClearVideo.style.display = "inline-flex";
+      if (videoPreviewWrapper) videoPreviewWrapper.style.display = "block";
+      if (formProjectVideoPreview) {
+        formProjectVideoPreview.src = existingVideo;
+        formProjectVideoPreview.style.display = "block";
+      }
+    } else {
+      if (videoUploadFunctionContainer) videoUploadFunctionContainer.style.display = "none";
+      if (btnToggleVideoUpload) btnToggleVideoUpload.textContent = "+ Choose Upload Video";
+      if (videoUploadStatus) {
+        videoUploadStatus.textContent = "Ready to upload";
+        videoUploadStatus.style.color = "var(--admin-text-muted)";
+      }
+      if (btnClearVideo) btnClearVideo.style.display = "none";
+      // Video preview NOT visible initially
+      if (videoPreviewWrapper) videoPreviewWrapper.style.display = "none";
+      if (formProjectVideoPreview) {
+        formProjectVideoPreview.src = "";
+        formProjectVideoPreview.style.display = "none";
+      }
+    }
+
     modal.classList.add("active");
   }
 
@@ -243,6 +287,110 @@ document.addEventListener("DOMContentLoaded", () => {
   const addNewProjectBtn = document.getElementById("addNewProjectBtn");
   if (addNewProjectBtn) {
     addNewProjectBtn.addEventListener("click", () => openProjectModal(null));
+  }
+
+  // Project Video Upload Controls
+  const btnToggleVideoUpload = document.getElementById("btnToggleVideoUpload");
+  const videoUploadFunctionContainer = document.getElementById("videoUploadFunctionContainer");
+  const projectVideoFileInput = document.getElementById("projectVideoFileInput");
+  const formProjectVideo = document.getElementById("formProjectVideo");
+  const videoUploadStatus = document.getElementById("videoUploadStatus");
+  const btnClearVideo = document.getElementById("btnClearVideo");
+  const videoPreviewWrapper = document.getElementById("videoPreviewWrapper");
+  const formProjectVideoPreview = document.getElementById("formProjectVideoPreview");
+
+  if (btnToggleVideoUpload && videoUploadFunctionContainer) {
+    btnToggleVideoUpload.addEventListener("click", () => {
+      const isVisible = videoUploadFunctionContainer.style.display === "block";
+      if (isVisible) {
+        videoUploadFunctionContainer.style.display = "none";
+        btnToggleVideoUpload.textContent = "+ Choose Upload Video";
+      } else {
+        // Upload function becomes visible
+        videoUploadFunctionContainer.style.display = "block";
+        btnToggleVideoUpload.textContent = "✕ Close Video Section";
+        // User rule: "when i choose upload video the upload function will be visible but not video its not visible"
+        const hasVideo = formProjectVideo && formProjectVideo.value.trim();
+        if (!hasVideo) {
+          if (videoPreviewWrapper) videoPreviewWrapper.style.display = "none";
+          if (formProjectVideoPreview) formProjectVideoPreview.style.display = "none";
+        }
+      }
+    });
+  }
+
+  if (projectVideoFileInput) {
+    projectVideoFileInput.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      if (videoUploadStatus) {
+        videoUploadStatus.textContent = `Uploading ${file.name}...`;
+        videoUploadStatus.style.color = "var(--admin-accent)";
+      }
+
+      const res = await cmsStorage.uploadVideo(file);
+      if (res.success) {
+        if (formProjectVideo) formProjectVideo.value = res.url;
+        if (videoUploadStatus) {
+          videoUploadStatus.textContent = `Uploaded: ${file.name} ✓`;
+          videoUploadStatus.style.color = "var(--admin-accent)";
+        }
+        if (btnClearVideo) btnClearVideo.style.display = "inline-flex";
+        // Video preview now becomes visible upon upload
+        if (videoPreviewWrapper) videoPreviewWrapper.style.display = "block";
+        if (formProjectVideoPreview) {
+          formProjectVideoPreview.src = res.url;
+          formProjectVideoPreview.style.display = "block";
+        }
+        showToast("Video uploaded successfully ✓");
+      } else {
+        if (videoUploadStatus) {
+          videoUploadStatus.textContent = `Upload failed: ${res.message}`;
+          videoUploadStatus.style.color = "#FF453A";
+        }
+        showToast(`❌ ${res.message || "Upload failed"}`, true);
+      }
+    });
+  }
+
+  if (formProjectVideo) {
+    formProjectVideo.addEventListener("input", (e) => {
+      const val = e.target.value.trim();
+      if (val) {
+        if (btnClearVideo) btnClearVideo.style.display = "inline-flex";
+        if (videoPreviewWrapper) videoPreviewWrapper.style.display = "block";
+        if (formProjectVideoPreview) {
+          formProjectVideoPreview.src = val;
+          formProjectVideoPreview.style.display = "block";
+        }
+      } else {
+        if (btnClearVideo) btnClearVideo.style.display = "none";
+        if (videoPreviewWrapper) videoPreviewWrapper.style.display = "none";
+        if (formProjectVideoPreview) {
+          formProjectVideoPreview.src = "";
+          formProjectVideoPreview.style.display = "none";
+        }
+      }
+    });
+  }
+
+  if (btnClearVideo) {
+    btnClearVideo.addEventListener("click", () => {
+      if (formProjectVideo) formProjectVideo.value = "";
+      if (projectVideoFileInput) projectVideoFileInput.value = "";
+      if (videoUploadStatus) {
+        videoUploadStatus.textContent = "Video removed";
+        videoUploadStatus.style.color = "var(--admin-text-muted)";
+      }
+      if (btnClearVideo) btnClearVideo.style.display = "none";
+      if (videoPreviewWrapper) videoPreviewWrapper.style.display = "none";
+      if (formProjectVideoPreview) {
+        formProjectVideoPreview.src = "";
+        formProjectVideoPreview.style.display = "none";
+      }
+      showToast("Video attachment removed ✓");
+    });
   }
 
   if (projectForm) {
@@ -275,6 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
           year: document.getElementById("formProjectYear").value,
           badge: document.getElementById("formProjectBadge").value,
           image: document.getElementById("formProjectImage").value,
+          video: document.getElementById("formProjectVideo") ? document.getElementById("formProjectVideo").value.trim() : "",
           tech: techArr,
           metrics: metrics,
           overview: document.getElementById("formProjectOverview").value,

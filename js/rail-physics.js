@@ -215,6 +215,7 @@ export class ClotheslineRail {
         <!-- Garment / Project Card -->
         <div class="hanger-card">
           <div class="card-media">
+            ${project.video ? '<span class="card-video-pill">🎬 Video</span>' : ''}
             <img src="${project.image}" alt="${project.title} interface preview" loading="lazy" />
             <div class="media-overlay">
               <span class="quick-action">Explore Case Study ↗</span>

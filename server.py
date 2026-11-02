@@ -12,6 +12,9 @@ import sys
 import json
 import ssl
 import sqlite3
+import re
+import time
+
 
 # Try loading .env if python-dotenv is available
 try:
@@ -441,6 +444,40 @@ try:
             return jsonify({"valid": True})
         return jsonify({"valid": False}), 401
 
+    @app.route("/api/upload-video", methods=["POST", "OPTIONS"])
+    def upload_video():
+        if request.method == "OPTIONS":
+            return jsonify({"status": "ok"})
+        auth = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+        custom_header = request.headers.get("X-Admin-Password", "").strip()
+        if auth != ADMIN_PASSWORD and custom_header != ADMIN_PASSWORD:
+            return jsonify({"error": "Unauthorized. Invalid Admin Key."}), 401
+
+        videos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "videos")
+        os.makedirs(videos_dir, exist_ok=True)
+
+        if "video" in request.files:
+            f = request.files["video"]
+            raw_name = f.filename or "video.mp4"
+            clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
+            dest_filename = f"{int(time.time())}_{clean_name}"
+            dest_path = os.path.join(videos_dir, dest_filename)
+            f.save(dest_path)
+            return jsonify({"url": f"./assets/videos/{dest_filename}", "status": "uploaded"})
+
+        x_filename = request.headers.get("X-Filename", "")
+        if x_filename:
+            from urllib.parse import unquote
+            raw_name = unquote(x_filename)
+            clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
+            dest_filename = f"{int(time.time())}_{clean_name}"
+            dest_path = os.path.join(videos_dir, dest_filename)
+            with open(dest_path, "wb") as out_f:
+                out_f.write(request.get_data())
+            return jsonify({"url": f"./assets/videos/{dest_filename}", "status": "uploaded"})
+
+        return jsonify({"error": "No video data received"}), 400
+
     @app.route("/api/health", methods=["GET"])
     def health():
         return jsonify({"status": "healthy", "service": "interactive-portfolio"})
@@ -472,7 +509,7 @@ if __name__ == "__main__":
             def send_cors_headers(self):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Password")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Password, X-Filename")
 
             def do_OPTIONS(self):
                 self.send_response(204)
@@ -533,6 +570,36 @@ if __name__ == "__main__":
                     self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(json.dumps({"status": "saved" if success else "error", "engine": info}).encode("utf-8"))
+                elif parsed.path == "/api/upload-video":
+                    auth = self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+                    custom_header = self.headers.get("X-Admin-Password", "").strip()
+                    if auth != ADMIN_PASSWORD and custom_header != ADMIN_PASSWORD:
+                        self.send_response(401)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_cors_headers()
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"error": "Unauthorized. Invalid Admin Key."}).encode("utf-8"))
+                        return
+
+                    length = int(self.headers.get("Content-Length", 0))
+                    x_filename = self.headers.get("X-Filename", "video.mp4")
+                    raw_name = urllib.parse.unquote(x_filename)
+                    clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
+                    dest_filename = f"{int(time.time())}_{clean_name}"
+
+                    videos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "videos")
+                    os.makedirs(videos_dir, exist_ok=True)
+                    dest_path = os.path.join(videos_dir, dest_filename)
+
+                    body = self.rfile.read(length)
+                    with open(dest_path, "wb") as f:
+                        f.write(body)
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_cors_headers()
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"url": f"./assets/videos/{dest_filename}", "status": "uploaded"}).encode("utf-8"))
                 elif parsed.path == "/api/verify-auth":
                     length = int(self.headers.get("Content-Length", 0))
                     body = self.rfile.read(length)

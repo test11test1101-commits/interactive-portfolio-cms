@@ -127,6 +127,12 @@ export class CaseStudyModal {
 
   close() {
     if (!this.isOpen()) return;
+    const activeVideo = this.modalBody.querySelector("video");
+    if (activeVideo) {
+      try {
+        activeVideo.pause();
+      } catch (e) {}
+    }
     this.playHapticTone("close");
     this.modal.classList.remove("active");
     document.body.style.overflow = "";
@@ -135,6 +141,12 @@ export class CaseStudyModal {
 
   navigateStep(direction) {
     if (!this.currentProject || this.allProjects.length === 0) return;
+    const activeVideo = this.modalBody.querySelector("video");
+    if (activeVideo) {
+      try {
+        activeVideo.pause();
+      } catch (e) {}
+    }
     const currentIndex = this.allProjects.findIndex(p => p.id === this.currentProject.id);
     let nextIndex = currentIndex + direction;
 
@@ -172,7 +184,11 @@ export class CaseStudyModal {
         <!-- Visual & Media Column -->
         <div class="modal-media-col">
           <div class="modal-hero-frame">
-            <img src="${p.image}" alt="${p.title} Preview" />
+            ${p.video ? `
+              <video class="modal-hero-video" src="${p.video}" poster="${p.image}" controls playsinline preload="metadata" style="width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; border-radius: inherit; background: #000;"></video>
+            ` : `
+              <img src="${p.image}" alt="${p.title} Preview" />
+            `}
             <div class="modal-hero-tag">${p.badge}</div>
           </div>
 
