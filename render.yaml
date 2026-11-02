@@ -17,5 +17,7 @@ services:
         value: "4000"
       - key: TIDB_USER
         value: 43eghUc9ZhsAxAo.root
+      - key: TIDB_PASSWORD
+        value: brY7OoRIozdKsK2j
       - key: TIDB_DATABASE
-        value: sys
+        value: test

@@ -5,6 +5,32 @@
 
 export const PROJECTS = [
   {
+    id: "proj-1793539866177",
+    title: "Auxiliary IT Helpdesk & Currency Terminal",
+    tagline: "Enterprise IT Operations, Real-Time Forex Telemetry & Live Desk",
+    category: "FinTech & Systems",
+    year: "2026",
+    badge: "HYBRID CLOUD / ZERO-FAILOVER",
+    tech: ["JavaScript (ES6+)", "Python 3", "Node.js", "TiDB Cloud (MySQL 8.0)", "REST APIs", "CSS3 Glassmorphism"],
+    image: "./assets/images/auxiliary_dashboard.jpg",
+    metrics: [
+      { label: "Relational Sync", value: "" },
+      { label: "Schema Tables", value: "14 Relational" },
+      { label: "failloer loss", value: "10k" },
+      { label: "system uptime", value: "99.98" }
+    ],
+    overview: "A mission-critical enterprise IT operations and foreign exchange monitoring platform combining real-time denomination rate telemetry with an active helpdesk queue, staff duty management, and full administrative CMS control.",
+    architecture: "Engineered with a hybrid multi-runtime backend (Python 3 PyMySQL and Node.js Express) connected via SSL/TLS to TiDB Cloud Serverless (MySQL 8.0). Built with automated multi-layer failover caching to local persistent JSON storage, real-time ticket queue synchronization, and a high-performance vanilla CSS glassmorphic dashboard interface free of framework overhead.",
+    highlights: [
+      "Real-time USD & 3rd currency exchange rate monitoring with banknote denomination breakdown ($1–$100)",
+      "Live visitor helpdesk desk with queue registration, ticket tracking, and automated officer dispatch",
+      "Administrative CMS console for live rate adjustments, personnel shift schedules, and tamper-resistant audit logs",
+      "Dual-layer persistence ensuring 100% operational uptime via cloud relational sync and local JSON caching"
+    ],
+    github: "https://github.com/your-username/auxiliary-dashboard",
+    demo: "https://auxiliary-dashboard.onrender.com"
+  },
+  {
     id: "apex-core",
     title: "Apex Core",
     tagline: "High-Frequency Liquidity & Market Analytics Dashboard",
