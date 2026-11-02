@@ -172,27 +172,6 @@ class CMSStorage {
     }
   }
 
-  async uploadVideo(file) {
-    const pwd = this.getAdminPassword();
-    const endpoint = this.getApiEndpoint().replace(/\/api\/portfolio$/, "/api/upload-video");
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "X-Filename": file.name,
-        "Authorization": `Bearer ${pwd}`,
-        "X-Admin-Password": pwd
-      },
-      body: file
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Upload failed (${res.status}): ${errText || res.statusText}`);
-    }
-
-    return await res.json();
-  }
-
   getData() {
     return this.data;
   }

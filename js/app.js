@@ -121,137 +121,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   renderBrandInfo(cmsData);
 
-  // Video Source Parsing Helper
-  function parseVideoSource(url) {
-    if (!url || typeof url !== "string") return null;
-    const trimmed = url.trim();
-    if (!trimmed) return null;
-
-    // YouTube detection
-    const ytMatch = trimmed.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-    if (ytMatch && ytMatch[1]) {
-      return {
-        type: "youtube",
-        embedUrl: `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=0&rel=0&modestbranding=1`,
-        original: trimmed
-      };
-    }
-
-    // Vimeo detection
-    const vimeoMatch = trimmed.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|album\/(\d+)\/video\/|)(\d+)(?:$|\/|\?)/i);
-    if (vimeoMatch && vimeoMatch[3]) {
-      return {
-        type: "vimeo",
-        embedUrl: `https://player.vimeo.com/video/${vimeoMatch[3]}?badge=0&autopause=0&player_id=0`,
-        original: trimmed
-      };
-    }
-
-    // Direct video file (mp4, webm, ogg, etc.)
-    return {
-      type: "video",
-      src: trimmed,
-      original: trimmed
-    };
-  }
-
-  // Bento Video Lightbox Modal Controls
-  const videoModal = document.getElementById("bentoVideoModal");
-  const videoModalClose = document.getElementById("videoModalCloseBtn");
-  const videoModalTitle = document.getElementById("videoModalTitle");
-  const videoModalContent = document.getElementById("videoModalContent");
-
-  function openVideoModal(url, title) {
-    if (!videoModal || !videoModalContent) return;
-    const parsed = parseVideoSource(url);
-    if (!parsed) return;
-
-    if (videoModalTitle) {
-      videoModalTitle.innerHTML = `<span>🎬</span> ${title || "Video Showcase"}`;
-    }
-
-    if (parsed.type === "youtube" || parsed.type === "vimeo") {
-      videoModalContent.innerHTML = `
-        <iframe src="${parsed.embedUrl}&autoplay=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%; height:100%; border:none;"></iframe>
-      `;
-    } else {
-      videoModalContent.innerHTML = `
-        <video src="${parsed.src}" controls autoplay playsinline style="width:100%; height:100%; display:block; object-fit:contain;"></video>
-      `;
-    }
-
-    videoModal.classList.add("active");
-  }
-
-  function closeVideoModal() {
-    if (!videoModal) return;
-    videoModal.classList.remove("active");
-    if (videoModalContent) videoModalContent.innerHTML = "";
-  }
-
-  if (videoModalClose) videoModalClose.addEventListener("click", closeVideoModal);
-  if (videoModal) {
-    videoModal.addEventListener("click", (e) => {
-      if (e.target === videoModal) closeVideoModal();
-    });
-  }
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && videoModal && videoModal.classList.contains("active")) {
-      closeVideoModal();
-    }
-  });
-
   // 9. Render Bento Capabilities
   function renderCapabilities(caps) {
     const bentoGrid = document.getElementById("bentoGrid");
     if (!bentoGrid) return;
-    bentoGrid.innerHTML = caps.map((cap, i) => {
-      const parsed = parseVideoSource(cap.video);
-      const hasVideo = !!parsed;
-
-      let videoHtml = "";
-      if (hasVideo) {
-        if (parsed.type === "youtube" || parsed.type === "vimeo") {
-          videoHtml = `
-            <div class="bento-video-player-wrap">
-              <span class="bento-video-badge"><span>🎬</span> Video Edit</span>
-              <button class="bento-video-expand-btn" data-video-url="${parsed.original}" data-video-title="${cap.title}" aria-label="Expand Video">⛶ Expand</button>
-              <iframe src="${parsed.embedUrl}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
-            </div>
-          `;
-        } else {
-          videoHtml = `
-            <div class="bento-video-player-wrap">
-              <span class="bento-video-badge"><span>🎬</span> Video Edit</span>
-              <button class="bento-video-expand-btn" data-video-url="${parsed.src}" data-video-title="${cap.title}" aria-label="Expand Video">⛶ Expand</button>
-              <video src="${parsed.src}" controls playsinline preload="metadata" loop></video>
-            </div>
-          `;
-        }
-      }
-
-      return `
-        <div class="bento-card bento-card-${(i % 4) + 1} ${hasVideo ? 'has-video' : ''}">
-          <div class="bento-card-content">
-            <div class="bento-icon">${cap.icon || "⚡"}</div>
-            <h3 class="bento-title">${cap.title}</h3>
-            <p class="bento-desc">${cap.desc}</p>
-          </div>
-          ${videoHtml}
-          <div class="bento-decor"></div>
-        </div>
-      `;
-    }).join("");
-
-    // Wire up expand buttons
-    bentoGrid.querySelectorAll(".bento-video-expand-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const url = btn.getAttribute("data-video-url");
-        const title = btn.getAttribute("data-video-title");
-        openVideoModal(url, title);
-      });
-    });
+    bentoGrid.innerHTML = caps.map((cap, i) => `
+      <div class="bento-card bento-card-${(i % 4) + 1}">
+        <div class="bento-icon">${cap.icon || "⚡"}</div>
+        <h3 class="bento-title">${cap.title}</h3>
+        <p class="bento-desc">${cap.desc}</p>
+        <div class="bento-decor"></div>
+      </div>
+    `).join("");
   }
   renderCapabilities(cmsData.capabilities);
 

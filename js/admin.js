@@ -397,48 +397,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Video Parsing & Preview Helper for CMS
-  function parseVideoSource(url) {
-    if (!url || typeof url !== "string") return null;
-    const trimmed = url.trim();
-    if (!trimmed) return null;
-
-    const ytMatch = trimmed.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-    if (ytMatch && ytMatch[1]) {
-      return {
-        type: "youtube",
-        embedUrl: `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=0&rel=0&modestbranding=1`,
-        original: trimmed
-      };
-    }
-
-    const vimeoMatch = trimmed.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|album\/(\d+)\/video\/|)(\d+)(?:$|\/|\?)/i);
-    if (vimeoMatch && vimeoMatch[3]) {
-      return {
-        type: "vimeo",
-        embedUrl: `https://player.vimeo.com/video/${vimeoMatch[3]}?badge=0&autopause=0&player_id=0`,
-        original: trimmed
-      };
-    }
-
-    return {
-      type: "video",
-      src: trimmed,
-      original: trimmed
-    };
-  }
-
-  function renderVideoPreviewHtml(videoUrl) {
-    const parsed = parseVideoSource(videoUrl);
-    if (!parsed) {
-      return `<div class="cms-video-empty-notice"><span>ℹ️</span> No video attached yet. Enter an MP4/WebM URL, YouTube, Vimeo, or upload a video file to preview your edit here.</div>`;
-    }
-    if (parsed.type === "youtube" || parsed.type === "vimeo") {
-      return `<iframe class="cms-video-frame" src="${parsed.embedUrl}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
-    }
-    return `<video class="cms-video-frame" src="${parsed.src}" controls playsinline preload="metadata"></video>`;
-  }
-
   // 7. Capabilities Bento Manager (Tab 3)
   function renderCapabilitiesManager() {
     const list = document.getElementById("capabilitiesList");
@@ -469,71 +427,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <label>Description</label>
           <textarea rows="2" class="cap-desc-input">${cap.desc}</textarea>
         </div>
-
-        <div class="cms-video-field-wrap">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-            <label style="font-weight: 700; font-size: 0.82rem; color: var(--admin-accent); display: flex; align-items: center; gap: 0.35rem;">
-              <span>🎬</span> Video Edit Showcase (Live Preview & Playback)
-            </label>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <label class="admin-btn admin-btn-secondary admin-btn-sm cms-video-upload-label" title="Upload local MP4 or WebM video">
-                <span class="upload-label-text">+ Upload Video File</span>
-                <input type="file" class="cap-file-upload" accept="video/mp4,video/webm,video/quicktime,video/*" style="display: none;" />
-              </label>
-              <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm btn-clear-video" title="Remove video">Clear</button>
-            </div>
-          </div>
-          <input type="text" class="cap-video-input" placeholder="e.g. ./assets/videos/demo_edit.webm or YouTube/Vimeo URL" value="${cap.video || ''}" />
-          <div class="cms-video-preview-box ${cap.video ? 'has-media' : ''}" id="capPreviewBox-${idx}">
-            ${renderVideoPreviewHtml(cap.video)}
-          </div>
-        </div>
       `;
-
-      // Video input change listener
-      const videoInput = row.querySelector(".cap-video-input");
-      const previewBox = row.querySelector(`#capPreviewBox-${idx}`);
-      const clearBtn = row.querySelector(".btn-clear-video");
-      const fileUpload = row.querySelector(".cap-file-upload");
-      const uploadLabelText = row.querySelector(".upload-label-text");
-
-      const updateVideoPreview = () => {
-        const val = videoInput.value.trim();
-        cmsData.capabilities[idx].video = val;
-        previewBox.classList.toggle("has-media", !!val);
-        previewBox.innerHTML = renderVideoPreviewHtml(val);
-      };
-
-      videoInput.addEventListener("input", updateVideoPreview);
-
-      clearBtn.addEventListener("click", () => {
-        videoInput.value = "";
-        updateVideoPreview();
-        showToast("Video removed from capability ✓");
-      });
-
-      if (fileUpload) {
-        fileUpload.addEventListener("change", async (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const origLabel = uploadLabelText.textContent;
-          uploadLabelText.textContent = "Uploading...";
-          try {
-            const res = await cmsStorage.uploadVideo(file);
-            if (res.url) {
-              videoInput.value = res.url;
-              updateVideoPreview();
-              showToast("Video uploaded successfully ✓");
-            }
-          } catch (err) {
-            showToast("❌ Upload failed: " + err.message, true);
-          } finally {
-            uploadLabelText.textContent = origLabel;
-            fileUpload.value = "";
-          }
-        });
-      }
 
       row.querySelector(".btn-delete-cap").addEventListener("click", async () => {
         cmsData.capabilities.splice(idx, 1);
@@ -552,12 +446,11 @@ document.addEventListener("DOMContentLoaded", () => {
         cmsData.capabilities[idx] = {
           icon: row.querySelector(".cap-icon-input").value,
           title: row.querySelector(".cap-title-input").value,
-          desc: row.querySelector(".cap-desc-input").value,
-          video: row.querySelector(".cap-video-input").value.trim()
+          desc: row.querySelector(".cap-desc-input").value
         };
       };
 
-      row.querySelectorAll(".cap-icon-input, .cap-title-input, .cap-desc-input").forEach(input => {
+      row.querySelectorAll("input, textarea").forEach(input => {
         input.addEventListener("input", updateCap);
       });
 
@@ -578,15 +471,14 @@ document.addEventListener("DOMContentLoaded", () => {
             cmsData.capabilities[idx] = {
               icon: row.querySelector(".cap-icon-input").value,
               title: row.querySelector(".cap-title-input").value,
-              desc: row.querySelector(".cap-desc-input").value,
-              video: row.querySelector(".cap-video-input").value.trim()
+              desc: row.querySelector(".cap-desc-input").value
             };
           }
         });
       }
 
       saveCapabilitiesBtn.disabled = true;
-      saveCapabilitiesBtn.textContent = "Saving to Database...";
+      saveCapabilitiesBtn.textContent = "Saving...";
       try {
         const res = await cmsStorage.save(cmsData);
         if (res.success) {
@@ -609,15 +501,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (addCapBtn) {
     addCapBtn.addEventListener("click", async () => {
       cmsData.capabilities.push({
-        icon: "🎬",
-        title: "Video Editing & Motion Graphics",
-        desc: "High-retention short-form video editing, visual pacing, dynamic captions, and sound design.",
-        video: "./assets/videos/demo_edit.webm"
+        icon: "🚀",
+        title: "New Architectural Focus",
+        desc: "Description of your specialization, system designs, or technical proficiency."
       });
       const res = await cmsStorage.save(cmsData);
       renderCapabilitiesManager();
       if (res.success) {
-        showToast("New capability with video showcase added ✓");
+        showToast("New capability added ✓");
       } else {
         showToast("❌ " + (res.message || "Failed to add capability"), true);
         handleAuthFailure(res.reason);
