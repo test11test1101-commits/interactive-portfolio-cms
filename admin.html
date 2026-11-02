@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio Studio CMS // Customize Projects & Physics Rail</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="./css/admin.css">
+</head>
+<body>
+
+  <!-- Top App Navigation -->
+  <header class="admin-header">
+    <div class="admin-header-brand">
+      <div class="admin-monogram">W.</div>
+      <div class="admin-title-wrap">
+        <h1>PORTFOLIO // CMS STUDIO</h1>
+        <span>Visual Content Management & Rail Customizer</span>
+      </div>
+    </div>
+
+    <div class="admin-header-actions">
+      <div id="dbEngineBadge" class="sync-status-badge" title="Active storage engine">
+        <span class="sync-dot"></span>
+        <span id="dbEngineText">Connecting...</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.35rem;">
+        <input type="password" id="adminPasswordInput" placeholder="Admin Key" title="Enter ADMIN_PASSWORD configured on Render" 
+               style="background: var(--admin-card); border: 1px solid var(--admin-border); color: var(--admin-text-main); padding: 0.35rem 0.65rem; border-radius: 6px; font-size: 0.78rem; width: 120px;" />
+      </div>
+
+      <button id="adminThemeToggle" class="admin-btn admin-btn-secondary admin-btn-sm" aria-label="Toggle Theme">
+        Theme
+      </button>
+
+      <a href="./index.html" class="admin-btn admin-btn-primary admin-btn-sm" target="_blank">
+        Preview Live Portfolio ↗
+      </a>
+    </div>
+  </header>
+
+  <div class="admin-app-layout">
+    <!-- Left Sidebar -->
+    <aside class="admin-sidebar">
+      <nav class="admin-nav-list">
+        <button class="admin-nav-item active" data-panel="panelProjects">
+          <span>📂 Projects on Rail</span>
+          <span class="nav-badge-count" id="projectsCountBadge">4</span>
+        </button>
+
+        <button class="admin-nav-item" data-panel="panelConfig">
+          <span>⚡ Brand & Rail Config</span>
+        </button>
+
+        <button class="admin-nav-item" data-panel="panelCapabilities">
+          <span>🧩 Capabilities Bento</span>
+        </button>
+
+        <button class="admin-nav-item" data-panel="panelTimeline">
+          <span>⏳ Career Journey</span>
+        </button>
+
+        <button class="admin-nav-item" data-panel="panelExport">
+          <span>💾 Export & Backup</span>
+        </button>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <p>Lyrch Studio CMS v1.0</p>
+        <p>Changes apply instantly across open tabs.</p>
+      </div>
+    </aside>
+
+    <!-- Main Viewport Area -->
+    <main class="admin-main-viewport">
+      <!-- 1. Projects on Rail Panel -->
+      <section id="panelProjects" class="admin-view-panel active">
+        <div class="panel-header">
+          <div class="panel-header-info">
+            <h2>Hanging Projects on the Rail</h2>
+            <p>Customize the order, imagery, tags, and deep-dive case study content of garments/projects suspended on the clothesline.</p>
+          </div>
+          <button id="addNewProjectBtn" class="admin-btn admin-btn-primary">
+            + Add New Project to Rail
+          </button>
+        </div>
+
+        <div class="projects-manager-grid" id="projectsListGrid">
+          <!-- Populated via admin.js -->
+        </div>
+      </section>
+
+      <!-- 2. Brand & Rail Config Panel -->
+      <section id="panelConfig" class="admin-view-panel">
+        <div class="panel-header">
+          <div class="panel-header-info">
+            <h2>Brand Identity & Rail Physics</h2>
+            <p>Tune the monogram logo, role title, status availability, and default wire slack/tension.</p>
+          </div>
+        </div>
+
+        <form id="configSettingsForm">
+          <div class="settings-card">
+            <h3>Visual Brand Identity</h3>
+            <p>Configure the logo monogram and header identity elements.</p>
+            
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="configMonogram">Monogram Icon (e.g. W., LR)</label>
+                <input type="text" id="configMonogram" maxlength="3" required />
+              </div>
+
+              <div class="form-field">
+                <label for="configBrandName">Studio / Brand Name</label>
+                <input type="text" id="configBrandName" required />
+              </div>
+
+              <div class="form-field">
+                <label for="configRole">Role / Subtitle</label>
+                <input type="text" id="configRole" required />
+              </div>
+
+              <div class="form-field">
+                <label for="configStatusText">Availability Status Badge</label>
+                <input type="text" id="configStatusText" required />
+              </div>
+
+              <div class="form-field">
+                <label for="configEmail">Direct Contact Email</label>
+                <input type="email" id="configEmail" required />
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>Clothesline Rail Physics Defaults</h3>
+            <p>Adjust how deeply the SVG catenary wire dips across the screen.</p>
+
+            <div class="form-field">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <label for="configTensionSlider">Default Wire Tension</label>
+                <span id="configTensionValue" style="font-weight: 700; color: var(--admin-accent);">55%</span>
+              </div>
+              <input type="range" id="configTensionSlider" min="0.2" max="0.95" step="0.05" value="0.55" style="width: 100%;" />
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--admin-text-muted); margin-top: 0.35rem;">
+                <span>Deep Sag (Slack line)</span>
+                <span>Taut Wire (Minimal dip)</span>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="admin-btn admin-btn-primary">
+            Save Brand & Rail Configuration
+          </button>
+        </form>
+      </section>
+
+      <!-- 3. Capabilities Bento Panel -->
+      <section id="panelCapabilities" class="admin-view-panel">
+        <div class="panel-header">
+          <div class="panel-header-info">
+            <h2>Capabilities Bento Grid</h2>
+            <p>Add and edit the 4 architectural disciplines displayed on the portfolio homepage.</p>
+          </div>
+          <button id="addCapabilityBtn" class="admin-btn admin-btn-primary">
+            + Add Capability
+          </button>
+        </div>
+
+        <div id="capabilitiesList">
+          <!-- Populated via admin.js -->
+        </div>
+      </section>
+
+      <!-- 4. Career Journey Panel -->
+      <section id="panelTimeline" class="admin-view-panel">
+        <div class="panel-header">
+          <div class="panel-header-info">
+            <h2>Career Journey & Milestones</h2>
+            <p>Edit roles, organizations, dates, and executive summaries.</p>
+          </div>
+          <button id="addTimelineBtn" class="admin-btn admin-btn-primary">
+            + Add Milestone
+          </button>
+        </div>
+
+        <div id="timelineList">
+          <!-- Populated via admin.js -->
+        </div>
+      </section>
+
+      <!-- 5. Export & Backup Panel -->
+      <section id="panelExport" class="admin-view-panel">
+        <div class="panel-header">
+          <div class="panel-header-info">
+            <h2>Export, Backup & Code Sync</h2>
+            <p>Export your edits directly into code files or download JSON backups.</p>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>Export to data.js</h3>
+          <p>Download an updated <code>data.js</code> file matching all your customizations. You can directly place this file into <code>js/data.js</code> to persist changes in your Git repository.</p>
+          <button id="downloadDataJsBtn" class="admin-btn admin-btn-primary">
+            Download data.js Code File ⬇
+          </button>
+        </div>
+
+        <div class="settings-card">
+          <h3>JSON Backup & Migration</h3>
+          <p>Export or import your entire portfolio dataset as a portable JSON file.</p>
+          <div style="display: flex; gap: 1rem;">
+            <button id="downloadJsonBtn" class="admin-btn admin-btn-secondary">
+              Download JSON Backup ⬇
+            </button>
+            <button id="importJsonBtn" class="admin-btn admin-btn-secondary">
+              Import JSON Backup ⬆
+            </button>
+            <input type="file" id="importFileInput" accept=".json" style="display: none;" />
+          </div>
+        </div>
+
+        <div class="settings-card" style="border-color: rgba(239, 68, 68, 0.3);">
+          <h3 style="color: var(--admin-danger);">Factory Demo Reset</h3>
+          <p>Clear all local customizations and restore original demo projects, capabilities, and configurations.</p>
+          <button id="factoryResetBtn" class="admin-btn admin-btn-danger">
+            Reset to Factory Defaults ↺
+          </button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Project Add/Edit Modal Window -->
+  <div id="projectEditorModal" class="admin-modal-overlay">
+    <div class="admin-modal-window">
+      <div class="admin-modal-header">
+        <h3 id="modalTitle">Edit Project</h3>
+        <button id="modalCloseBtn" class="admin-btn admin-btn-secondary admin-btn-sm">&times;</button>
+      </div>
+
+      <form id="projectForm" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+        <div class="admin-modal-body">
+          <input type="hidden" id="formProjectId" />
+
+          <div class="form-grid-2">
+            <div class="form-field">
+              <label for="formProjectTitle">Project Title</label>
+              <input type="text" id="formProjectTitle" required placeholder="e.g. Apex Core" />
+            </div>
+
+            <div class="form-field">
+              <label for="formProjectTagline">Tagline</label>
+              <input type="text" id="formProjectTagline" required placeholder="e.g. High-Frequency Market Analytics" />
+            </div>
+
+            <div class="form-field">
+              <label for="formProjectCategory">Category</label>
+              <select id="formProjectCategory">
+                <option value="FinTech & Systems">FinTech & Systems</option>
+                <option value="Creative & 3D">Creative & 3D</option>
+                <option value="Systems & AI">Systems & AI</option>
+                <option value="Mobile & Web3">Mobile & Web3</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="formProjectYear">Year</label>
+              <input type="text" id="formProjectYear" required placeholder="2026" />
+            </div>
+
+            <div class="form-field">
+              <label for="formProjectBadge">Price / Floating Tag Badge</label>
+              <input type="text" id="formProjectBadge" required placeholder="e.g. SUB-5MS LATENCY or $180" />
+            </div>
+
+            <div class="form-field">
+              <label for="formProjectImage">Image Path / URL</label>
+              <input type="text" id="formProjectImage" required placeholder="./assets/images/apex_dashboard.jpg" />
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="formProjectTech">Tech Stack (comma separated)</label>
+            <input type="text" id="formProjectTech" required placeholder="Rust, TypeScript, WebGPU, WebSockets" />
+          </div>
+
+          <!-- Telemetry Metrics Grid Inputs -->
+          <div style="margin: 1.25rem 0;">
+            <label style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--admin-text-muted); display: block; margin-bottom: 0.5rem;">
+              Telemetry Metrics (4 Highlights)
+            </label>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
+              <div>
+                <input type="text" id="formMetricLabel1" placeholder="Label 1" style="width: 100%; margin-bottom: 0.25rem;" />
+                <input type="text" id="formMetricVal1" placeholder="Val 1" style="width: 100%;" />
+              </div>
+              <div>
+                <input type="text" id="formMetricLabel2" placeholder="Label 2" style="width: 100%; margin-bottom: 0.25rem;" />
+                <input type="text" id="formMetricVal2" placeholder="Val 2" style="width: 100%;" />
+              </div>
+              <div>
+                <input type="text" id="formMetricLabel3" placeholder="Label 3" style="width: 100%; margin-bottom: 0.25rem;" />
+                <input type="text" id="formMetricVal3" placeholder="Val 3" style="width: 100%;" />
+              </div>
+              <div>
+                <input type="text" id="formMetricLabel4" placeholder="Label 4" style="width: 100%; margin-bottom: 0.25rem;" />
+                <input type="text" id="formMetricVal4" placeholder="Val 4" style="width: 100%;" />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="formProjectOverview">Overview Narrative</label>
+            <textarea id="formProjectOverview" rows="3" required placeholder="What problem does this solve and what makes it extraordinary?"></textarea>
+          </div>
+
+          <div class="form-field">
+            <label for="formProjectArchitecture">Architecture & System Design</label>
+            <textarea id="formProjectArchitecture" rows="3" required placeholder="Details on pipeline, performance optimizations, algorithms..."></textarea>
+          </div>
+
+          <div class="form-field">
+            <label for="formProjectHighlights">Key Highlights (1 per line)</label>
+            <textarea id="formProjectHighlights" rows="3" placeholder="Bullet points of major engineering accomplishments"></textarea>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-field">
+              <label for="formProjectDemo">Live Demo URL</label>
+              <input type="url" id="formProjectDemo" placeholder="https://..." />
+            </div>
+
+            <div class="form-field">
+              <label for="formProjectGithub">GitHub Repository URL</label>
+              <input type="url" id="formProjectGithub" placeholder="https://github.com/..." />
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-modal-footer">
+          <button type="button" id="modalCancelBtn" class="admin-btn admin-btn-secondary">Cancel</button>
+          <button type="submit" class="admin-btn admin-btn-primary">Save to Rail</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="adminToast" class="admin-toast">Saved ✓</div>
+
+  <!-- Script Entry Point -->
+  <script type="module" src="./js/admin.js"></script>
+</body>
+</html>
