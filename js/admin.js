@@ -4,7 +4,7 @@
  * and live synchronization with the portfolio storefront.
  */
 
-import { cmsStorage } from "./cms-storage.js";
+import { cmsStorage, DEFAULT_ADMIN_KEY } from "./cms-storage.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   let cmsData = cmsStorage.getData();
@@ -17,9 +17,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const pwdInput = document.getElementById("adminPasswordInput");
   if (pwdInput) {
-    pwdInput.value = cmsStorage.getAdminPassword() || "studio2026";
+    const currentKey = cmsStorage.getAdminPassword() || DEFAULT_ADMIN_KEY;
+    pwdInput.value = currentKey;
+    cmsStorage.setAdminPassword(currentKey);
+
+    const onKeyChange = (val) => {
+      cmsStorage.setAdminPassword(val);
+      pwdInput.classList.remove("auth-error");
+    };
+
+    pwdInput.addEventListener("input", (e) => onKeyChange(e.target.value));
     pwdInput.addEventListener("change", (e) => {
-      cmsStorage.setAdminPassword(e.target.value);
+      onKeyChange(e.target.value);
       showToast("Admin Key updated ✓");
     });
   }
@@ -37,9 +46,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   updateEngineDisplay(cmsStorage.dbEngine);
 
+  // Sync state whenever backend or another tab updates
   window.addEventListener("portfolio-cms-updated", (e) => {
+    cmsData = cmsStorage.getData();
     if (e.detail && e.detail._engine) {
       updateEngineDisplay(e.detail._engine);
+    }
+    renderProjectsList();
+    
+    // Only re-populate forms if user is not actively typing inside them
+    const active = document.activeElement;
+    const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT");
+    if (!isTyping) {
+      initConfigTab();
+      renderCapabilitiesManager();
+      renderTimelineManager();
     }
   });
 
@@ -70,13 +91,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 3. Toast Helper
   const toast = document.getElementById("adminToast");
-  function showToast(message) {
+  let toastTimer = null;
+  function showToast(message, isError = false) {
     if (!toast) return;
+    if (toastTimer) clearTimeout(toastTimer);
     toast.textContent = message;
+    toast.classList.toggle("toast-error", isError);
     toast.classList.add("show");
-    setTimeout(() => {
+    toastTimer = setTimeout(() => {
       toast.classList.remove("show");
-    }, 2800);
+      toast.classList.remove("toast-error");
+    }, isError ? 4500 : 2800);
+  }
+
+  function handleAuthFailure(reason) {
+    if (reason === "unauthorized" && pwdInput) {
+      pwdInput.classList.add("auth-error");
+      pwdInput.focus();
+    }
   }
 
   // 4. Render Project Cards List (Tab 1)
@@ -125,24 +157,34 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function moveProject(index, offset) {
+  async function moveProject(index, offset) {
     const targetIndex = index + offset;
     if (targetIndex < 0 || targetIndex >= cmsData.projects.length) return;
     const temp = cmsData.projects[index];
     cmsData.projects[index] = cmsData.projects[targetIndex];
     cmsData.projects[targetIndex] = temp;
 
-    cmsStorage.save(cmsData);
+    const res = await cmsStorage.save(cmsData);
     renderProjectsList();
-    showToast("Rail sequence updated ✓");
+    if (res.success) {
+      showToast("Rail sequence updated ✓");
+    } else {
+      showToast("❌ " + (res.message || "Failed to save sequence"), true);
+      handleAuthFailure(res.reason);
+    }
   }
 
-  function deleteProject(id) {
+  async function deleteProject(id) {
     if (!confirm("Are you sure you want to remove this project from the rail?")) return;
     cmsData.projects = cmsData.projects.filter(p => p.id !== id);
-    cmsStorage.save(cmsData);
+    const res = await cmsStorage.save(cmsData);
     renderProjectsList();
-    showToast("Project removed ✓");
+    if (res.success) {
+      showToast("Project removed ✓");
+    } else {
+      showToast("❌ " + (res.message || "Failed to remove project"), true);
+      handleAuthFailure(res.reason);
+    }
   }
 
   // 5. Project Editor Modal
@@ -163,10 +205,10 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("formProjectYear").value = project ? project.year : "2026";
     document.getElementById("formProjectBadge").value = project ? project.badge : "FEATURED";
     document.getElementById("formProjectImage").value = project ? project.image : "./assets/images/apex_dashboard.jpg";
-    document.getElementById("formProjectTech").value = project ? project.tech.join(", ") : "React, TypeScript, Three.js";
+    document.getElementById("formProjectTech").value = project ? (Array.isArray(project.tech) ? project.tech.join(", ") : project.tech) : "React, TypeScript, Three.js";
     document.getElementById("formProjectOverview").value = project ? project.overview : "";
     document.getElementById("formProjectArchitecture").value = project ? project.architecture : "";
-    document.getElementById("formProjectHighlights").value = project ? project.highlights.join("\n") : "";
+    document.getElementById("formProjectHighlights").value = project ? (Array.isArray(project.highlights) ? project.highlights.join("\n") : project.highlights) : "";
     document.getElementById("formProjectDemo").value = project ? project.demo : "https://example.com";
     document.getElementById("formProjectGithub").value = project ? project.github : "https://github.com";
 
@@ -180,8 +222,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     for (let i = 0; i < 4; i++) {
       const m = metrics[i] || { label: `Metric ${i+1}`, value: "-" };
-      document.getElementById(`formMetricLabel${i+1}`).value = m.label;
-      document.getElementById(`formMetricVal${i+1}`).value = m.value;
+      document.getElementById(`formMetricLabel${i+1}`).value = m.label || "";
+      document.getElementById(`formMetricVal${i+1}`).value = m.value || "";
     }
 
     modal.classList.add("active");
@@ -204,49 +246,74 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (projectForm) {
-    projectForm.addEventListener("submit", (e) => {
+    projectForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const metrics = [
-        { label: document.getElementById("formMetricLabel1").value, value: document.getElementById("formMetricVal1").value },
-        { label: document.getElementById("formMetricLabel2").value, value: document.getElementById("formMetricVal2").value },
-        { label: document.getElementById("formMetricLabel3").value, value: document.getElementById("formMetricVal3").value },
-        { label: document.getElementById("formMetricLabel4").value, value: document.getElementById("formMetricVal4").value }
-      ];
-
-      const techArr = document.getElementById("formProjectTech").value.split(",").map(s => s.trim()).filter(Boolean);
-      const highlightsArr = document.getElementById("formProjectHighlights").value.split("\n").map(s => s.trim()).filter(Boolean);
-
-      const projectData = {
-        id: document.getElementById("formProjectId").value,
-        title: document.getElementById("formProjectTitle").value,
-        tagline: document.getElementById("formProjectTagline").value,
-        category: document.getElementById("formProjectCategory").value,
-        year: document.getElementById("formProjectYear").value,
-        badge: document.getElementById("formProjectBadge").value,
-        image: document.getElementById("formProjectImage").value,
-        tech: techArr,
-        metrics: metrics,
-        overview: document.getElementById("formProjectOverview").value,
-        architecture: document.getElementById("formProjectArchitecture").value,
-        highlights: highlightsArr,
-        demo: document.getElementById("formProjectDemo").value,
-        github: document.getElementById("formProjectGithub").value
-      };
-
-      if (editingProjectId) {
-        // Update existing
-        const idx = cmsData.projects.findIndex(p => p.id === editingProjectId);
-        if (idx !== -1) cmsData.projects[idx] = projectData;
-      } else {
-        // Add new
-        cmsData.projects.unshift(projectData);
+      const submitBtn = projectForm.querySelector("button[type='submit']");
+      const origText = submitBtn ? submitBtn.textContent : "Save to Rail";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Saving to Database...";
       }
 
-      cmsStorage.save(cmsData);
-      renderProjectsList();
-      closeProjectModal();
-      showToast(editingProjectId ? "Project updated ✓" : "New project suspended on rail ✓");
+      try {
+        const metrics = [
+          { label: document.getElementById("formMetricLabel1").value, value: document.getElementById("formMetricVal1").value },
+          { label: document.getElementById("formMetricLabel2").value, value: document.getElementById("formMetricVal2").value },
+          { label: document.getElementById("formMetricLabel3").value, value: document.getElementById("formMetricVal3").value },
+          { label: document.getElementById("formMetricLabel4").value, value: document.getElementById("formMetricVal4").value }
+        ];
+
+        const techArr = document.getElementById("formProjectTech").value.split(",").map(s => s.trim()).filter(Boolean);
+        const highlightsArr = document.getElementById("formProjectHighlights").value.split("\n").map(s => s.trim()).filter(Boolean);
+
+        const projectData = {
+          id: document.getElementById("formProjectId").value,
+          title: document.getElementById("formProjectTitle").value,
+          tagline: document.getElementById("formProjectTagline").value,
+          category: document.getElementById("formProjectCategory").value,
+          year: document.getElementById("formProjectYear").value,
+          badge: document.getElementById("formProjectBadge").value,
+          image: document.getElementById("formProjectImage").value,
+          tech: techArr,
+          metrics: metrics,
+          overview: document.getElementById("formProjectOverview").value,
+          architecture: document.getElementById("formProjectArchitecture").value,
+          highlights: highlightsArr,
+          demo: document.getElementById("formProjectDemo").value,
+          github: document.getElementById("formProjectGithub").value
+        };
+
+        if (editingProjectId) {
+          const idx = cmsData.projects.findIndex(p => p.id === editingProjectId);
+          if (idx !== -1) {
+            cmsData.projects[idx] = projectData;
+          } else {
+            cmsData.projects.unshift(projectData);
+          }
+        } else {
+          cmsData.projects.unshift(projectData);
+        }
+
+        const res = await cmsStorage.save(cmsData);
+        renderProjectsList();
+
+        if (res.success) {
+          closeProjectModal();
+          const engineLabel = res.engine === "tidb" ? "TiDB Cloud" : (res.engine === "sqlite" ? "SQLite" : "Local Storage");
+          showToast(editingProjectId ? `Project updated ✓ (${engineLabel})` : `New project suspended on rail ✓ (${engineLabel})`);
+        } else {
+          showToast("❌ " + (res.message || "Failed to save project"), true);
+          handleAuthFailure(res.reason);
+        }
+      } catch (err) {
+        showToast("❌ Unexpected error: " + err.message, true);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = origText;
+        }
+      }
     });
   }
 
@@ -272,15 +339,32 @@ document.addEventListener("DOMContentLoaded", () => {
     if (tensionInput && tensionVal) {
       tensionInput.value = rail.defaultTension || 0.55;
       tensionVal.textContent = `${Math.round((rail.defaultTension || 0.55) * 100)}%`;
-      tensionInput.addEventListener("input", (e) => {
+      tensionInput.oninput = (e) => {
         tensionVal.textContent = `${Math.round(parseFloat(e.target.value) * 100)}%`;
-      });
+      };
     }
+  }
 
-    const configForm = document.getElementById("configSettingsForm");
-    if (configForm) {
-      configForm.addEventListener("submit", (e) => {
-        e.preventDefault();
+  const configForm = document.getElementById("configSettingsForm");
+  if (configForm) {
+    configForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const saveBtn = configForm.querySelector("button[type='submit']");
+      const origText = saveBtn ? saveBtn.textContent : "Save Brand & Rail Configuration";
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving to Database...";
+      }
+
+      try {
+        const monoInput = document.getElementById("configMonogram");
+        const nameInput = document.getElementById("configBrandName");
+        const roleInput = document.getElementById("configRole");
+        const statusInput = document.getElementById("configStatusText");
+        const emailInput = document.getElementById("configEmail");
+        const tensionInput = document.getElementById("configTensionSlider");
+
         cmsData.brand = {
           monogram: monoInput.value,
           name: nameInput.value,
@@ -294,10 +378,23 @@ document.addEventListener("DOMContentLoaded", () => {
           defaultTension: parseFloat(tensionInput.value)
         };
 
-        cmsStorage.save(cmsData);
-        showToast("Brand and rail settings saved ✓");
-      });
-    }
+        const res = await cmsStorage.save(cmsData);
+        if (res.success) {
+          const engineLabel = res.engine === "tidb" ? "TiDB Cloud" : (res.engine === "sqlite" ? "SQLite" : "Local Storage");
+          showToast(`Brand & Rail configuration saved ✓ (${engineLabel})`);
+        } else {
+          showToast("❌ " + (res.message || "Failed to save configuration"), true);
+          handleAuthFailure(res.reason);
+        }
+      } catch (err) {
+        showToast("❌ Error saving settings: " + err.message, true);
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = origText;
+        }
+      }
+    });
   }
 
   // 7. Capabilities Bento Manager (Tab 3)
@@ -332,42 +429,90 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      row.querySelector(".btn-delete-cap").addEventListener("click", () => {
+      row.querySelector(".btn-delete-cap").addEventListener("click", async () => {
         cmsData.capabilities.splice(idx, 1);
-        cmsStorage.save(cmsData);
+        const res = await cmsStorage.save(cmsData);
         renderCapabilitiesManager();
-        showToast("Capability removed ✓");
+        if (res.success) {
+          showToast("Capability removed ✓");
+        } else {
+          showToast("❌ " + (res.message || "Failed to remove capability"), true);
+          handleAuthFailure(res.reason);
+        }
       });
 
-      // Auto update on input
+      // Update in memory on input
       const updateCap = () => {
         cmsData.capabilities[idx] = {
           icon: row.querySelector(".cap-icon-input").value,
           title: row.querySelector(".cap-title-input").value,
           desc: row.querySelector(".cap-desc-input").value
         };
-        cmsStorage.save(cmsData);
       };
 
       row.querySelectorAll("input, textarea").forEach(input => {
-        input.addEventListener("change", updateCap);
+        input.addEventListener("input", updateCap);
       });
 
       list.appendChild(row);
     });
   }
 
+  // Save Capabilities Bento button
+  const saveCapabilitiesBtn = document.getElementById("saveCapabilitiesBtn");
+  if (saveCapabilitiesBtn) {
+    saveCapabilitiesBtn.addEventListener("click", async () => {
+      // Collect current values from DOM
+      const list = document.getElementById("capabilitiesList");
+      if (list) {
+        const rows = list.querySelectorAll(".settings-card");
+        rows.forEach((row, idx) => {
+          if (cmsData.capabilities[idx]) {
+            cmsData.capabilities[idx] = {
+              icon: row.querySelector(".cap-icon-input").value,
+              title: row.querySelector(".cap-title-input").value,
+              desc: row.querySelector(".cap-desc-input").value
+            };
+          }
+        });
+      }
+
+      saveCapabilitiesBtn.disabled = true;
+      saveCapabilitiesBtn.textContent = "Saving...";
+      try {
+        const res = await cmsStorage.save(cmsData);
+        if (res.success) {
+          const engineLabel = res.engine === "tidb" ? "TiDB Cloud" : (res.engine === "sqlite" ? "SQLite" : "Local Storage");
+          showToast(`Capabilities Bento saved ✓ (${engineLabel})`);
+        } else {
+          showToast("❌ " + (res.message || "Failed to save capabilities"), true);
+          handleAuthFailure(res.reason);
+        }
+      } catch (err) {
+        showToast("❌ Error: " + err.message, true);
+      } finally {
+        saveCapabilitiesBtn.disabled = false;
+        saveCapabilitiesBtn.textContent = "Save Capabilities Bento ✓";
+      }
+    });
+  }
+
   const addCapBtn = document.getElementById("addCapabilityBtn");
   if (addCapBtn) {
-    addCapBtn.addEventListener("click", () => {
+    addCapBtn.addEventListener("click", async () => {
       cmsData.capabilities.push({
         icon: "🚀",
         title: "New Architectural Focus",
         desc: "Description of your specialization, system designs, or technical proficiency."
       });
-      cmsStorage.save(cmsData);
+      const res = await cmsStorage.save(cmsData);
       renderCapabilitiesManager();
-      showToast("New capability added ✓");
+      if (res.success) {
+        showToast("New capability added ✓");
+      } else {
+        showToast("❌ " + (res.message || "Failed to add capability"), true);
+        handleAuthFailure(res.reason);
+      }
     });
   }
 
@@ -409,13 +554,19 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      row.querySelector(".btn-delete-time").addEventListener("click", () => {
+      row.querySelector(".btn-delete-time").addEventListener("click", async () => {
         cmsData.timeline.splice(idx, 1);
-        cmsStorage.save(cmsData);
+        const res = await cmsStorage.save(cmsData);
         renderTimelineManager();
-        showToast("Timeline milestone removed ✓");
+        if (res.success) {
+          showToast("Timeline milestone removed ✓");
+        } else {
+          showToast("❌ " + (res.message || "Failed to remove timeline milestone"), true);
+          handleAuthFailure(res.reason);
+        }
       });
 
+      // Update in memory on input
       const updateTime = () => {
         cmsData.timeline[idx] = {
           period: row.querySelector(".time-period-input").value,
@@ -424,20 +575,60 @@ document.addEventListener("DOMContentLoaded", () => {
           company: row.querySelector(".time-company-input").value,
           summary: row.querySelector(".time-summary-input").value
         };
-        cmsStorage.save(cmsData);
       };
 
       row.querySelectorAll("input, textarea").forEach(input => {
-        input.addEventListener("change", updateTime);
+        input.addEventListener("input", updateTime);
       });
 
       list.appendChild(row);
     });
   }
 
+  // Save Career Journey button
+  const saveTimelineBtn = document.getElementById("saveTimelineBtn");
+  if (saveTimelineBtn) {
+    saveTimelineBtn.addEventListener("click", async () => {
+      // Collect current values from DOM
+      const list = document.getElementById("timelineList");
+      if (list) {
+        const rows = list.querySelectorAll(".settings-card");
+        rows.forEach((row, idx) => {
+          if (cmsData.timeline[idx]) {
+            cmsData.timeline[idx] = {
+              period: row.querySelector(".time-period-input").value,
+              location: row.querySelector(".time-loc-input").value,
+              role: row.querySelector(".time-role-input").value,
+              company: row.querySelector(".time-company-input").value,
+              summary: row.querySelector(".time-summary-input").value
+            };
+          }
+        });
+      }
+
+      saveTimelineBtn.disabled = true;
+      saveTimelineBtn.textContent = "Saving...";
+      try {
+        const res = await cmsStorage.save(cmsData);
+        if (res.success) {
+          const engineLabel = res.engine === "tidb" ? "TiDB Cloud" : (res.engine === "sqlite" ? "SQLite" : "Local Storage");
+          showToast(`Career Journey saved ✓ (${engineLabel})`);
+        } else {
+          showToast("❌ " + (res.message || "Failed to save timeline"), true);
+          handleAuthFailure(res.reason);
+        }
+      } catch (err) {
+        showToast("❌ Error: " + err.message, true);
+      } finally {
+        saveTimelineBtn.disabled = false;
+        saveTimelineBtn.textContent = "Save Career Journey ✓";
+      }
+    });
+  }
+
   const addTimeBtn = document.getElementById("addTimelineBtn");
   if (addTimeBtn) {
-    addTimeBtn.addEventListener("click", () => {
+    addTimeBtn.addEventListener("click", async () => {
       cmsData.timeline.unshift({
         period: "2026 - Present",
         location: "Remote / Global",
@@ -445,9 +636,14 @@ document.addEventListener("DOMContentLoaded", () => {
         company: "Next Corp",
         summary: "Leading technical strategy, architecture, and developer experience."
       });
-      cmsStorage.save(cmsData);
+      const res = await cmsStorage.save(cmsData);
       renderTimelineManager();
-      showToast("Timeline milestone added ✓");
+      if (res.success) {
+        showToast("Timeline milestone added ✓");
+      } else {
+        showToast("❌ " + (res.message || "Failed to add milestone"), true);
+        handleAuthFailure(res.reason);
+      }
     });
   }
 
@@ -490,7 +686,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         try {
           const parsed = JSON.parse(event.target.result);
           cmsData = {
@@ -500,12 +696,16 @@ document.addEventListener("DOMContentLoaded", () => {
             capabilities: Array.isArray(parsed.capabilities) ? parsed.capabilities : cmsData.capabilities,
             timeline: Array.isArray(parsed.timeline) ? parsed.timeline : cmsData.timeline
           };
-          cmsStorage.save(cmsData);
+          const res = await cmsStorage.save(cmsData);
           renderProjectsList();
           initConfigTab();
           renderCapabilitiesManager();
           renderTimelineManager();
-          showToast("Portfolio data imported successfully ✓");
+          if (res.success) {
+            showToast("Portfolio data imported successfully ✓");
+          } else {
+            showToast("❌ " + (res.message || "Failed to sync imported data"), true);
+          }
         } catch (err) {
           alert("Error parsing JSON file. Please ensure it is a valid portfolio backup.");
         }

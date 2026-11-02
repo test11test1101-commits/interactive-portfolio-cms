@@ -239,6 +239,7 @@ def get_db_connection():
     if TIDB_HOST:
         try:
             import pymysql
+            import pymysql.cursors
             ctx = ssl.create_default_context()
             conn = pymysql.connect(
                 host=TIDB_HOST,
@@ -248,7 +249,10 @@ def get_db_connection():
                 database=TIDB_DATABASE,
                 ssl=ctx,
                 cursorclass=pymysql.cursors.DictCursor,
-                autocommit=True
+                autocommit=True,
+                connect_timeout=8,
+                read_timeout=15,
+                write_timeout=15
             )
             return conn, "tidb"
         except Exception as e:
@@ -256,7 +260,7 @@ def get_db_connection():
 
     # Local SQLite Fallback
     db_path = os.path.join(os.path.dirname(__file__), "portfolio.db")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn, "sqlite"
 
@@ -279,6 +283,10 @@ def init_tables():
                 "INSERT INTO portfolio_store (id, payload) VALUES ('main', %s)",
                 (json.dumps(DEFAULT_DATA),)
             )
+            try:
+                conn.commit()
+            except Exception:
+                pass
     else:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS portfolio_store (
@@ -334,19 +342,31 @@ def save_portfolio_data(data):
                 merged["brand"] = {**current["brand"], **data["brand"]}
             if "rail" in current and "rail" in data and isinstance(data["rail"], dict):
                 merged["rail"] = {**current["rail"], **data["rail"]}
+            if "projects" in data and isinstance(data["projects"], list):
+                merged["projects"] = data["projects"]
+            if "capabilities" in data and isinstance(data["capabilities"], list):
+                merged["capabilities"] = data["capabilities"]
+            if "timeline" in data and isinstance(data["timeline"], list):
+                merged["timeline"] = data["timeline"]
         else:
             merged = data
+
         conn, engine = get_db_connection()
         cursor = conn.cursor()
         payload_str = json.dumps(merged)
+
         if engine == "tidb":
             cursor.execute(
-                "UPDATE portfolio_store SET payload = %s WHERE id = 'main'",
+                "INSERT INTO portfolio_store (id, payload) VALUES ('main', %s) ON DUPLICATE KEY UPDATE payload = VALUES(payload)",
                 (payload_str,)
             )
+            try:
+                conn.commit()
+            except Exception:
+                pass
         else:
             cursor.execute(
-                "UPDATE portfolio_store SET payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'main'",
+                "INSERT INTO portfolio_store (id, payload, updated_at) VALUES ('main', ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP",
                 (payload_str,)
             )
             conn.commit()
@@ -366,6 +386,13 @@ try:
 
     app = Flask(__name__, static_folder=".")
 
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Admin-Password"
+        return response
+
     @app.route("/")
     def index():
         return send_from_directory(".", "index.html")
@@ -379,8 +406,10 @@ try:
     def static_proxy(path):
         return send_from_directory(".", path)
 
-    @app.route("/api/portfolio", methods=["GET"])
+    @app.route("/api/portfolio", methods=["GET", "OPTIONS"])
     def get_portfolio():
+        if request.method == "OPTIONS":
+            return jsonify({"status": "ok"})
         data, engine = load_portfolio_data()
         return jsonify({"data": data, "engine": engine, "status": "ok"})
 
@@ -402,8 +431,10 @@ try:
             return jsonify({"status": "saved", "engine": info})
         return jsonify({"error": info}), 500
 
-    @app.route("/api/verify-auth", methods=["POST"])
+    @app.route("/api/verify-auth", methods=["POST", "OPTIONS"])
     def verify_auth():
+        if request.method == "OPTIONS":
+            return jsonify({"valid": True})
         req_json = request.get_json(silent=True) or {}
         password = req_json.get("password", "")
         if password == ADMIN_PASSWORD:
@@ -431,6 +462,23 @@ if __name__ == "__main__":
         import urllib.parse
 
         class FallbackHandler(http.server.SimpleHTTPRequestHandler):
+            def log_message(self, format, *args):
+                try:
+                    super().log_message(format, *args)
+                except Exception:
+                    # Ignore I/O errors from disconnected pseudo-terminals
+                    pass
+
+            def send_cors_headers(self):
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Password")
+
+            def do_OPTIONS(self):
+                self.send_response(204)
+                self.send_cors_headers()
+                self.end_headers()
+
             def do_GET(self):
                 parsed = urllib.parse.urlparse(self.path)
                 if parsed.path == "/api/portfolio":
@@ -438,15 +486,19 @@ if __name__ == "__main__":
                     response = json.dumps({"data": data, "engine": engine, "status": "ok"}).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
-                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(response)
                 elif parsed.path == "/api/health":
                     response = json.dumps({"status": "healthy"}).encode("utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
+                    self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(response)
+                elif parsed.path in ["/admin", "/admin/"]:
+                    self.path = "/admin.html"
+                    super().do_GET()
                 else:
                     super().do_GET()
 
@@ -458,31 +510,48 @@ if __name__ == "__main__":
                     if auth != ADMIN_PASSWORD and custom_header != ADMIN_PASSWORD:
                         self.send_response(401)
                         self.send_header("Content-Type", "application/json")
+                        self.send_cors_headers()
                         self.end_headers()
-                        self.wfile.write(json.dumps({"error": "Unauthorized"}).encode("utf-8"))
+                        self.wfile.write(json.dumps({"error": "Unauthorized. Invalid Admin Key."}).encode("utf-8"))
                         return
 
                     length = int(self.headers.get("Content-Length", 0))
                     body = self.rfile.read(length)
-                    data = json.loads(body.decode("utf-8"))
+                    try:
+                        data = json.loads(body.decode("utf-8"))
+                    except Exception as err:
+                        self.send_response(400)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_cors_headers()
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"error": f"Invalid JSON payload: {err}"}).encode("utf-8"))
+                        return
+
                     success, info = save_portfolio_data(data)
                     self.send_response(200 if success else 500)
                     self.send_header("Content-Type", "application/json")
+                    self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(json.dumps({"status": "saved" if success else "error", "engine": info}).encode("utf-8"))
                 elif parsed.path == "/api/verify-auth":
                     length = int(self.headers.get("Content-Length", 0))
                     body = self.rfile.read(length)
-                    data = json.loads(body.decode("utf-8"))
+                    try:
+                        data = json.loads(body.decode("utf-8"))
+                    except Exception:
+                        data = {}
                     valid = data.get("password") == ADMIN_PASSWORD
                     self.send_response(200 if valid else 401)
                     self.send_header("Content-Type", "application/json")
+                    self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(json.dumps({"valid": valid}).encode("utf-8"))
                 else:
                     self.send_response(404)
+                    self.send_cors_headers()
                     self.end_headers()
 
         print(f"[Server] Running built-in Python HTTP server on http://localhost:{PORT}")
         server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), FallbackHandler)
         server.serve_forever()
+

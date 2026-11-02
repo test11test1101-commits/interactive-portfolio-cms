@@ -533,3 +533,22 @@ body {
   transform: translateY(0);
   opacity: 1;
 }
+
+.admin-toast.toast-error {
+  border-color: var(--admin-danger);
+  background: #2a1215;
+  color: #ff8080;
+  box-shadow: 0 12px 32px rgba(239, 68, 68, 0.25);
+}
+
+#adminPasswordInput.auth-error {
+  border-color: var(--admin-danger) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
