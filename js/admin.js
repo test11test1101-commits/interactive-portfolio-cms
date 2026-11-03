@@ -280,8 +280,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (modalCloseBtn) modalCloseBtn.addEventListener("click", closeProjectModal);
   if (modalCancelBtn) modalCancelBtn.addEventListener("click", closeProjectModal);
+
+  // Prevent closing when clicking outside the form - user must explicitly use the 'X' button or Cancel
   modal.addEventListener("click", (e) => {
-    if (e.target === modal) closeProjectModal();
+    if (e.target === modal) {
+      // Do NOT close the modal when clicking outside the form
+      const win = modal.querySelector(".admin-modal-window");
+      if (win) {
+        win.classList.remove("modal-attention");
+        void win.offsetWidth; // trigger reflow
+        win.classList.add("modal-attention");
+      }
+    }
   });
 
   const addNewProjectBtn = document.getElementById("addNewProjectBtn");
