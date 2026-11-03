@@ -14,6 +14,7 @@ import ssl
 import sqlite3
 import re
 import time
+import mimetypes
 
 
 # Try loading .env if python-dotenv is available
@@ -279,6 +280,15 @@ def init_tables():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS asset_media (
+                id VARCHAR(64) PRIMARY KEY,
+                filename VARCHAR(255) NOT NULL,
+                mime_type VARCHAR(100) NOT NULL,
+                data LONGBLOB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         cursor.execute("SELECT id FROM portfolio_store WHERE id = 'main'")
         row = cursor.fetchone()
         if not row:
@@ -298,6 +308,15 @@ def init_tables():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS asset_media (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                data BLOB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         cursor.execute("SELECT id FROM portfolio_store WHERE id = 'main'")
         row = cursor.fetchone()
         if not row:
@@ -314,6 +333,53 @@ try:
     init_tables()
 except Exception as err:
     print(f"[Database Init Warning] {err}")
+
+def save_media_to_db(media_id, filename, mime_type, data_bytes):
+    try:
+        conn, engine = get_db_connection()
+        cursor = conn.cursor()
+        if engine == "tidb":
+            cursor.execute("""
+                INSERT INTO asset_media (id, filename, mime_type, data)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE filename = VALUES(filename), mime_type = VALUES(mime_type), data = VALUES(data)
+            """, (media_id, filename, mime_type, data_bytes))
+            try:
+                conn.commit()
+            except Exception:
+                pass
+        else:
+            cursor.execute("""
+                INSERT OR REPLACE INTO asset_media (id, filename, mime_type, data)
+                VALUES (?, ?, ?, ?)
+            """, (media_id, filename, mime_type, data_bytes))
+            conn.commit()
+        conn.close()
+        return True, engine
+    except Exception as e:
+        print(f"[Media Save Error] {e}")
+        return False, str(e)
+
+def load_media_from_db(media_id):
+    try:
+        conn, engine = get_db_connection()
+        cursor = conn.cursor()
+        if engine == "tidb":
+            cursor.execute("SELECT filename, mime_type, data FROM asset_media WHERE id = %s", (media_id,))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                data = row.get("data")
+                return data, row.get("mime_type", "image/jpeg"), row.get("filename", "")
+        else:
+            cursor.execute("SELECT filename, mime_type, data FROM asset_media WHERE id = ?", (media_id,))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                return row["data"], row["mime_type"], row["filename"]
+    except Exception as e:
+        print(f"[Media Load Error] {e}")
+    return None, None, None
 
 def load_portfolio_data():
     try:
@@ -385,7 +451,7 @@ def save_portfolio_data(data):
 # ---------------------------------------------------------------------------
 
 try:
-    from flask import Flask, jsonify, request, send_from_directory
+    from flask import Flask, jsonify, request, send_from_directory, make_response
 
     app = Flask(__name__, static_folder=".")
 
@@ -393,7 +459,7 @@ try:
     def add_cors_headers(response):
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Admin-Password"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Admin-Password, X-Filename"
         return response
 
     @app.route("/")
@@ -478,6 +544,83 @@ try:
 
         return jsonify({"error": "No video data received"}), 400
 
+    @app.route("/api/upload-image", methods=["POST", "OPTIONS"])
+    def upload_image():
+        if request.method == "OPTIONS":
+            return jsonify({"status": "ok"})
+        auth = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+        custom_header = request.headers.get("X-Admin-Password", "").strip()
+        if auth != ADMIN_PASSWORD and custom_header != ADMIN_PASSWORD:
+            return jsonify({"error": "Unauthorized. Invalid Admin Key."}), 401
+
+        images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
+        os.makedirs(images_dir, exist_ok=True)
+
+        data_bytes = None
+        raw_name = "upload.jpg"
+
+        if "image" in request.files:
+            f = request.files["image"]
+            raw_name = f.filename or "upload.jpg"
+            data_bytes = f.read()
+        elif "file" in request.files:
+            f = request.files["file"]
+            raw_name = f.filename or "upload.jpg"
+            data_bytes = f.read()
+        else:
+            x_filename = request.headers.get("X-Filename", "")
+            if x_filename:
+                from urllib.parse import unquote
+                raw_name = unquote(x_filename)
+            data_bytes = request.get_data()
+
+        if not data_bytes:
+            return jsonify({"error": "No image data received"}), 400
+
+        clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
+        mime_type = mimetypes.guess_type(clean_name)[0] or request.headers.get("Content-Type") or "image/jpeg"
+        timestamp = int(time.time())
+        dest_filename = f"{timestamp}_{clean_name}"
+        media_id = f"img_{timestamp}_{clean_name}"
+
+        # 1. Save directly into TiDB Cloud Database
+        db_success, engine_info = save_media_to_db(media_id, clean_name, mime_type, data_bytes)
+
+        # 2. Also save to local disk cache in ./assets/images/
+        try:
+            dest_path = os.path.join(images_dir, dest_filename)
+            with open(dest_path, "wb") as out_f:
+                out_f.write(data_bytes)
+        except Exception as e:
+            print(f"[Local Disk Save Warning] {e}")
+
+        return jsonify({
+            "status": "uploaded",
+            "mediaId": media_id,
+            "url": f"/api/media/{media_id}",
+            "localPath": f"./assets/images/{dest_filename}",
+            "engine": engine_info
+        })
+
+    @app.route("/api/media/<media_id>", methods=["GET"])
+    def get_media(media_id):
+        data_bytes, mime_type, filename = load_media_from_db(media_id)
+        if data_bytes:
+            response = make_response(data_bytes)
+            response.headers["Content-Type"] = mime_type or "image/jpeg"
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            return response
+
+        images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
+        clean_id = re.sub(r'[^a-zA-Z0-9_.-]', '_', media_id)
+        for ext in ["", ".jpg", ".jpeg", ".png", ".webp", ".svg", ".gif"]:
+            local_candidate = os.path.join(images_dir, clean_id + ext)
+            if os.path.exists(local_candidate):
+                return send_from_directory(images_dir, clean_id + ext)
+
+        return jsonify({"error": "Media asset not found"}), 404
+
     @app.route("/api/health", methods=["GET"])
     def health():
         return jsonify({"status": "healthy", "service": "interactive-portfolio"})
@@ -533,6 +676,38 @@ if __name__ == "__main__":
                     self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(response)
+                elif parsed.path.startswith("/api/media/"):
+                    media_id = parsed.path.replace("/api/media/", "").strip()
+                    data_bytes, mime_type, filename = load_media_from_db(media_id)
+                    if data_bytes:
+                        self.send_response(200)
+                        self.send_header("Content-Type", mime_type or "image/jpeg")
+                        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+                        self.send_cors_headers()
+                        self.end_headers()
+                        self.wfile.write(data_bytes)
+                        return
+                    else:
+                        images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
+                        clean_id = re.sub(r'[^a-zA-Z0-9_.-]', '_', media_id)
+                        found = False
+                        for ext in ["", ".jpg", ".jpeg", ".png", ".webp", ".svg", ".gif"]:
+                            cand = os.path.join(images_dir, clean_id + ext)
+                            if os.path.exists(cand):
+                                self.send_response(200)
+                                self.send_header("Content-Type", mimetypes.guess_type(cand)[0] or "image/jpeg")
+                                self.send_cors_headers()
+                                self.end_headers()
+                                with open(cand, "rb") as f:
+                                    self.wfile.write(f.read())
+                                found = True
+                                break
+                        if not found:
+                            self.send_response(404)
+                            self.send_cors_headers()
+                            self.end_headers()
+                            self.wfile.write(b'{"error": "Media asset not found"}')
+                        return
                 elif parsed.path in ["/admin", "/admin/"]:
                     self.path = "/admin.html"
                     super().do_GET()
@@ -570,6 +745,52 @@ if __name__ == "__main__":
                     self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(json.dumps({"status": "saved" if success else "error", "engine": info}).encode("utf-8"))
+                elif parsed.path == "/api/upload-image":
+                    auth = self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+                    custom_header = self.headers.get("X-Admin-Password", "").strip()
+                    if auth != ADMIN_PASSWORD and custom_header != ADMIN_PASSWORD:
+                        self.send_response(401)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_cors_headers()
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"error": "Unauthorized. Invalid Admin Key."}).encode("utf-8"))
+                        return
+
+                    length = int(self.headers.get("Content-Length", 0))
+                    x_filename = self.headers.get("X-Filename", "upload.jpg")
+                    raw_name = urllib.parse.unquote(x_filename)
+                    clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
+                    mime_type = mimetypes.guess_type(clean_name)[0] or self.headers.get("Content-Type") or "image/jpeg"
+                    timestamp = int(time.time())
+                    dest_filename = f"{timestamp}_{clean_name}"
+                    media_id = f"img_{timestamp}_{clean_name}"
+
+                    body = self.rfile.read(length)
+
+                    # 1. Save directly into TiDB Cloud Database
+                    db_success, engine_info = save_media_to_db(media_id, clean_name, mime_type, body)
+
+                    # 2. Also save to local disk cache in ./assets/images/
+                    images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "images")
+                    os.makedirs(images_dir, exist_ok=True)
+                    try:
+                        dest_path = os.path.join(images_dir, dest_filename)
+                        with open(dest_path, "wb") as f:
+                            f.write(body)
+                    except Exception as e:
+                        print(f"[Local Disk Save Warning] {e}")
+
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_cors_headers()
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "uploaded",
+                        "mediaId": media_id,
+                        "url": f"/api/media/{media_id}",
+                        "localPath": f"./assets/images/{dest_filename}",
+                        "engine": engine_info
+                    }).encode("utf-8"))
                 elif parsed.path == "/api/upload-video":
                     auth = self.headers.get("Authorization", "").replace("Bearer ", "").strip()
                     custom_header = self.headers.get("X-Admin-Password", "").strip()

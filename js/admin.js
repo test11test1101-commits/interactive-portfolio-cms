@@ -205,7 +205,20 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("formProjectCategory").value = project ? project.category : "Creative & 3D";
     document.getElementById("formProjectYear").value = project ? project.year : "2026";
     document.getElementById("formProjectBadge").value = project ? project.badge : "FEATURED";
-    document.getElementById("formProjectImage").value = project ? project.image : "./assets/images/apex_dashboard.jpg";
+    const imgVal = project ? project.image : "./assets/images/apex_dashboard.jpg";
+    document.getElementById("formProjectImage").value = imgVal;
+    const formProjectImagePreview = document.getElementById("formProjectImagePreview");
+    if (formProjectImagePreview) {
+      formProjectImagePreview.src = imgVal;
+      formProjectImagePreview.style.opacity = "1";
+    }
+    const projectImageFileInput = document.getElementById("projectImageFileInput");
+    if (projectImageFileInput) projectImageFileInput.value = "";
+    const projectImageUploadStatus = document.getElementById("projectImageUploadStatus");
+    if (projectImageUploadStatus) {
+      projectImageUploadStatus.textContent = project ? "Image set ✓" : "Select file to upload to TiDB";
+      projectImageUploadStatus.style.color = "var(--admin-text-muted)";
+    }
     document.getElementById("formProjectTech").value = project ? (Array.isArray(project.tech) ? project.tech.join(", ") : project.tech) : "React, TypeScript, Three.js";
     document.getElementById("formProjectOverview").value = project ? project.overview : "";
     document.getElementById("formProjectArchitecture").value = project ? project.architecture : "";
@@ -297,6 +310,65 @@ document.addEventListener("DOMContentLoaded", () => {
   const addNewProjectBtn = document.getElementById("addNewProjectBtn");
   if (addNewProjectBtn) {
     addNewProjectBtn.addEventListener("click", () => openProjectModal(null));
+  }
+
+  // Project Image File Selection & TiDB Upload
+  const projectImageFileInput = document.getElementById("projectImageFileInput");
+  const formProjectImage = document.getElementById("formProjectImage");
+  const formProjectImagePreview = document.getElementById("formProjectImagePreview");
+  const projectImageUploadStatus = document.getElementById("projectImageUploadStatus");
+
+  if (projectImageFileInput) {
+    projectImageFileInput.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      // Instant preview using object URL
+      if (formProjectImagePreview) {
+        formProjectImagePreview.src = URL.createObjectURL(file);
+        formProjectImagePreview.style.opacity = "1";
+      }
+
+      if (projectImageUploadStatus) {
+        projectImageUploadStatus.textContent = `Uploading ${file.name} to TiDB database...`;
+        projectImageUploadStatus.style.color = "var(--admin-accent)";
+      }
+
+      const res = await cmsStorage.uploadImage(file);
+      if (res.success) {
+        if (formProjectImage) formProjectImage.value = res.url;
+        if (formProjectImagePreview) {
+          formProjectImagePreview.src = res.url;
+          formProjectImagePreview.style.opacity = "1";
+        }
+        if (projectImageUploadStatus) {
+          const engineLabel = res.engine === "tidb" ? "TiDB Cloud Database" : (res.engine === "sqlite" ? "SQLite Database" : "Database");
+          projectImageUploadStatus.textContent = `Saved in ${engineLabel} ✓ (${file.name})`;
+          projectImageUploadStatus.style.color = "var(--admin-accent)";
+        }
+        showToast("Image uploaded and saved to database ✓");
+      } else {
+        if (projectImageUploadStatus) {
+          projectImageUploadStatus.textContent = `Upload failed: ${res.message}`;
+          projectImageUploadStatus.style.color = "#FF453A";
+        }
+        showToast(`❌ ${res.message || "Failed to upload image"}`, true);
+      }
+    });
+  }
+
+  if (formProjectImage) {
+    formProjectImage.addEventListener("input", (e) => {
+      const val = e.target.value.trim();
+      if (formProjectImagePreview) {
+        if (val) {
+          formProjectImagePreview.src = val;
+          formProjectImagePreview.style.opacity = "1";
+        } else {
+          formProjectImagePreview.style.opacity = "0";
+        }
+      }
+    });
   }
 
   // Project Video Upload Controls

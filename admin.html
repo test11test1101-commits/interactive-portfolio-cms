@@ -287,14 +287,43 @@
               <input type="text" id="formProjectYear" required placeholder="2026" />
             </div>
 
-            <div class="form-field">
+            <div class="form-field" style="grid-column: 1 / -1;">
               <label for="formProjectBadge">Price / Floating Tag Badge</label>
               <input type="text" id="formProjectBadge" required placeholder="e.g. SUB-5MS LATENCY or $180" />
             </div>
+          </div>
 
-            <div class="form-field">
-              <label for="formProjectImage">Image Path / URL</label>
-              <input type="text" id="formProjectImage" required placeholder="./assets/images/apex_dashboard.jpg" />
+          <!-- Cover Image Upload & Location Picker -->
+          <div class="image-admin-box" style="margin-bottom: 1.25rem; padding: 1rem; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--admin-border); border-radius: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <label style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--admin-text-muted); display: block;">
+                  🖼️ Project Cover Image (Clothesline Rail Thumbnail)
+                </label>
+                <span style="font-size: 0.74rem; color: var(--admin-text-muted);">Select any image location (.jpg, .jpeg, .png, .webp, .svg, .gif, .avif) — uploads & saves to TiDB Cloud Database</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+              <!-- Thumbnail Preview -->
+              <div style="width: 88px; height: 68px; border-radius: 6px; overflow: hidden; background: #000; border: 1px solid var(--admin-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative;">
+                <img id="formProjectImagePreview" src="./assets/images/apex_dashboard.jpg" alt="Preview" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.opacity='0'" onload="this.style.opacity='1'" />
+              </div>
+
+              <!-- Upload Function & Path Input -->
+              <div style="flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+                  <label for="projectImageFileInput" class="admin-btn admin-btn-primary admin-btn-sm" style="cursor: pointer; margin-bottom: 0;">
+                    📁 Select Image File (JPG, PNG, WebP, SVG...)
+                  </label>
+                  <input type="file" id="projectImageFileInput" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.svg,.avif" style="display: none;" />
+                  <span id="projectImageUploadStatus" style="font-size: 0.76rem; color: var(--admin-text-muted);">Select file to upload to TiDB</span>
+                </div>
+
+                <div class="form-field" style="margin-bottom: 0;">
+                  <input type="text" id="formProjectImage" required placeholder="./assets/images/apex_dashboard.jpg or /api/media/..." style="width: 100%;" />
+                </div>
+              </div>
             </div>
           </div>
 

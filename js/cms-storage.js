@@ -177,6 +177,49 @@ class CMSStorage {
     return api.replace(/\/api\/portfolio$/, "/api/upload-video");
   }
 
+  getImageUploadEndpoint() {
+    const api = this.getApiEndpoint();
+    return api.replace(/\/api\/portfolio$/, "/api/upload-image");
+  }
+
+  async uploadImage(file) {
+    if (!file) return { success: false, message: "No image file selected" };
+    const pwd = this.getAdminPassword() || DEFAULT_ADMIN_KEY;
+    const endpoint = this.getImageUploadEndpoint();
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${pwd}`,
+          "X-Admin-Password": pwd,
+          "X-Filename": encodeURIComponent(file.name),
+          "Content-Type": file.type || "application/octet-stream"
+        },
+        body: file
+      });
+
+      if (res.status === 401) {
+        return {
+          success: false,
+          reason: "unauthorized",
+          message: "Authentication failed: Invalid Admin Key."
+        };
+      }
+
+      if (res.ok) {
+        const json = await res.json();
+        return { success: true, url: json.url, localPath: json.localPath, engine: json.engine, mediaId: json.mediaId };
+      }
+
+      const errText = await res.text();
+      return { success: false, message: `Upload failed (${res.status}): ${errText}` };
+    } catch (err) {
+      console.error("[CMS] Image upload error:", err);
+      return { success: false, message: `Upload failed: ${err.message}` };
+    }
+  }
+
   async uploadVideo(file) {
     if (!file) return { success: false, message: "No file selected" };
     const pwd = this.getAdminPassword() || DEFAULT_ADMIN_KEY;
